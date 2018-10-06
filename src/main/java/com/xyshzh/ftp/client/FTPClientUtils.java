@@ -1,13 +1,14 @@
 package com.xyshzh.ftp.client;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.SocketException;
 
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPClientConfig;
 
 /**
- * FTP 客户端.
+ * FTP 客户端工具.
  * @author Shengjun Liu
  * @version 2018-10-02
  */
@@ -33,10 +34,11 @@ public class FTPClientUtils {
    * @param username 服务器登录用户名
    * @param password 服务器登录用户密码
    * @throws IllegalArgumentException
-   * @throws IOException 
+   * @throws ConnectException
    * @throws SocketException 
+   * @throws IOException 
    */
-  public FTPClientUtils(String ip, String username, String password) throws IllegalArgumentException, SocketException, IOException {
+  public FTPClientUtils(String ip, String username, String password) throws IllegalArgumentException, ConnectException, SocketException, IOException {
     this(ip, 21, username, password, false, null);
   }
 
@@ -46,10 +48,11 @@ public class FTPClientUtils {
    * @param username 服务器登录用户名
    * @param password 服务器登录用户密码
    * @throws IllegalArgumentException
-   * @throws IOException 
+   * @throws ConnectException
    * @throws SocketException 
+   * @throws IOException 
    */
-  public FTPClientUtils(String ip, int port, String username, String password) throws IllegalArgumentException, SocketException, IOException {
+  public FTPClientUtils(String ip, int port, String username, String password) throws IllegalArgumentException, ConnectException, SocketException, IOException {
     this(ip, port, username, password, false, null);
   }
 
@@ -61,11 +64,12 @@ public class FTPClientUtils {
    * @param passiveMode 服务器链接采用被动模式[默认false]
    * @param basePath 服务器登录后需要切换的目录
    * @throws IllegalArgumentException
-   * @throws IOException 
+   * @throws ConnectException
    * @throws SocketException 
+   * @throws IOException 
    */
   public FTPClientUtils(String ip, int port, String username, String password, boolean passiveMode, String basePath)
-      throws IllegalArgumentException, SocketException, IOException {
+      throws IllegalArgumentException, ConnectException, SocketException, IOException {
     if (null == ip || 0 == ip.trim().length()) { throw new IllegalArgumentException("服务器IP指定异常."); }
     if (0 > port || 65535 < port) { throw new IllegalArgumentException("服务器端口指定异常."); }
     if (null == username || 0 == username.trim().length()) { throw new IllegalArgumentException("服务器用户名指定异常."); }
@@ -77,6 +81,33 @@ public class FTPClientUtils {
     this.password = password;
     this.passiveMode = passiveMode;
     this.basePath = basePath;
+    if (null == this.ftpClient) {
+      // 创建链接实例
+      this.ftpClient = new FTPClient();
+      // 链接
+      ftpClient.connect(this.ip, this.port);
+      // 登录
+      ftpClient.login(this.username, this.password);
+      // 切换目录
+      if (null != this.basePath) ftpClient.changeWorkingDirectory(basePath);
+      // 修改模式
+      if (this.passiveMode) ftpClient.enterLocalPassiveMode();
+      // 修改Unix配置,FTP架设在Windows上,可忽略
+      ftpClient.configure(new FTPClientConfig("com.xyshzh.ftp.client.UnixFTPEntryParser"));
+    }
+  }
+
+  /**
+   * FTP 重链.
+   * @throws IllegalArgumentException
+   * @throws ConnectException
+   * @throws SocketException 
+   * @throws IOException 
+   */
+  public void reconnect() throws IllegalArgumentException, ConnectException, SocketException, IOException {
+    if (null != this.ftpClient) {
+      close();
+    }
     if (null == this.ftpClient) {
       // 创建链接实例
       this.ftpClient = new FTPClient();
@@ -162,6 +193,9 @@ public class FTPClientUtils {
       }
     } catch (IOException e) {
       e.printStackTrace();
+    } finally {
+      // 置空
+      this.ftpClient = null;
     }
   }
 
