@@ -106,6 +106,52 @@ public class FTPUtils {
   }
 
   /**
+   * 判断文件或目录是否存在.
+   * true: 存在, false: 不存在.
+   * @param filepath 文件或目录地址.
+   * @return
+   * @throws IOException
+   */
+  public boolean isExsits(String filepath) throws IOException {
+    if (null == filepath) { return false; }
+    checkConnect();
+    if ("/".equals(filepath)) { return true; }
+    /** 先尝试目录 */
+    if (this.ftpClient.changeWorkingDirectory(filepath)) {
+      this.ftpClient.changeToParentDirectory();
+      return true;
+    } else {
+      if (filepath.endsWith("/")) { return false; }
+    }
+    /** 再尝试文件 */
+    this.ftpClient.changeToParentDirectory(); // 切换到父目录,类似于'cd /'
+    this.ftpClient.enterLocalPassiveMode();
+    int index = filepath.lastIndexOf("/");
+    String path = -1 < index ? filepath.substring(0, index + 1) : "/";
+    String name = -1 < index ? filepath.substring(index + 1) : filepath;
+    FTPFile[] fs = this.ftpClient.listFiles(path); // 查询目录内容
+    if (null == fs || 0 == fs.length) {
+      return false;
+    } else {
+      for (FTPFile f : fs) {
+        if (name.equals(f.getName())) { return true; }
+      }
+    }
+    return false;
+  }
+
+  public boolean renameFile(String srcFname, String targetFname) throws IOException {
+    if (null == srcFname || null == targetFname) { return false; }
+    checkConnect();
+    try {
+      return this.ftpClient.rename(srcFname, targetFname);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return false;
+  }
+
+  /**
    * 获取服务器目录内目录内容.
    * @param pathname 文件目录
    * @return
@@ -197,6 +243,66 @@ public class FTPUtils {
       log.info("上传文件目录不存在:  " + (pathname + (pathname.endsWith("/") ? "" : "/") + filename)); // 提示
       return false;
     }
+  }
+
+  /**
+   * 下载服务器根数据到本地.</br>
+   * @param remotePath 服务器绝对路径
+   * @param localPath 本地绝对路径
+   * @param deleteRemoteData 删除服务器历史文件
+   * @return
+   * @throws IOException 
+   */
+  public boolean downloadDirectory(String remotePath, String localPath, boolean deleteRemoteData) throws IOException {
+    if (!remotePath.endsWith("/")) {
+      remotePath = remotePath + "/";
+    }
+    if (!localPath.endsWith("/")) {
+      localPath = localPath + "/";
+    }
+    checkConnect();
+    this.ftpClient.setFileType(FTPClient.BINARY_FILE_TYPE); // 设置文件类型为二进制文件,便于传输
+    this.ftpClient.changeToParentDirectory(); // 切换到父目录,类似于'cd /'
+    /** 先尝试目录 */
+    if (this.ftpClient.changeWorkingDirectory(remotePath)) {
+      FTPFile[] files = this.ftpClient.listFiles(remotePath);
+      log.info("请求文件内容总数 :: " + (null != files ? files.length : 0));
+      if (null != files && 0 < files.length) {
+        log.info("开始处理文件内容 ...... ");
+        for (FTPFile file : files) {
+          if (file.isFile()) {
+            String rfn = remotePath + file.getName();
+            String lfn = localPath + file.getName();
+            log.info("文件处理中 :: " + rfn + "  -->  " + lfn);
+            OutputStream is = new FileOutputStream(new File(lfn + ".temp")); // 创建输出流
+            boolean status = this.ftpClient.retrieveFile(rfn, is); // 开始下载
+            is.close(); // 关闭输出流
+            new File(lfn + ".temp").renameTo(new File(lfn));
+            log.info("文件下载结果 :: " + rfn + "  -->  " + lfn + "  ::  " + status);
+            if (status && deleteRemoteData) { // 删除远程文件
+              boolean deleted = this.ftpClient.deleteFile(remotePath + file.getName());
+              log.info("文件删除结果 :: " + rfn + "  ::  " + deleted);
+            }
+          } else {
+            if (!".".equals(file.getName()) && !"./".equals(file.getName()) && !"..".equals(file.getName()) && !"../".equals(file.getName())) {
+              String rfn = remotePath + file.getName() + "/";
+              String lfn = localPath + file.getName() + "/";
+              log.info("目录处理中 :: " + lfn);
+              File f = new File(localPath + file.getName() + "/");
+              if (f.exists() || f.mkdirs()) {
+                boolean status = this.downloadDirectory(rfn, lfn, deleteRemoteData);
+                if (status && deleteRemoteData) { // 删除远程文件
+                  this.ftpClient.removeDirectory(remotePath + file.getName());
+                }
+              }
+            }
+          }
+        }
+      }
+    } else {
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -315,11 +421,12 @@ public class FTPUtils {
    * @throws IOException 
    */
   public boolean deleteFile(String pathname, String filename) throws IOException {
+    if (null == filename) { return false; }
     checkConnect();
     this.ftpClient.changeToParentDirectory(); // 切换到父目录,类似于'cd /'
     if (null != pathname && !this.ftpClient.changeWorkingDirectory(pathname)) return false; // 如果有指定目录则先切换目录,切换失败,退出方法
     boolean status = this.ftpClient.deleteFile(filename); // 删除文件
-    log.info((status ? "已删除文件:  " : "文件删除失败:  ") + (null != pathname ? pathname + filename : filename).replace("//", "/").replace("//", "/"));
+    log.info((status ? "已删除文件:  " : "文件删除失败:  ") + filename + (null == pathname ? "" : (" 在目录 " + pathname + " 中 ")));
     this.ftpClient.changeToParentDirectory(); // 切换到父目录,类似于'cd /'
     return status;
   }
@@ -327,10 +434,30 @@ public class FTPUtils {
   /**
    * 检查FTP登录正常状态.
    * @throws RuntimeException
+   * @throws IOException 
    */
-  public void checkConnect() throws RuntimeException {
-    int replyCode = this.ftpClient.getReplyCode();
+  public void checkConnect() throws RuntimeException, IOException {
+    int replyCode = this.ftpClient.pwd();
     if (!FTPReply.isPositiveCompletion(replyCode)) { throw new RuntimeException("FTP服务器登录失败,错误代码:" + replyCode); }
+  }
+
+  /**
+   * 关闭FTP链接.
+   */
+  public void close() {
+    try {
+      if (null != this.ftpClient && this.ftpClient.isConnected()) {
+        // 退出登录
+        this.ftpClient.logout();
+        // 断开链接
+        this.ftpClient.disconnect();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    } finally {
+      // 置空
+      this.ftpClient = null;
+    }
   }
 
 }

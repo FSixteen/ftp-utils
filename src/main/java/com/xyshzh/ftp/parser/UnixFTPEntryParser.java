@@ -1,4 +1,4 @@
-package com.xyshzh.ftp.client;
+package com.xyshzh.ftp.parser;
 import java.text.ParseException;
 import java.util.List;
 import java.util.ListIterator;

@@ -39,7 +39,7 @@ public class FTPClientUtils {
    * @throws IOException 
    */
   public FTPClientUtils(String ip, String username, String password) throws IllegalArgumentException, ConnectException, SocketException, IOException {
-    this(ip, 21, username, password, false, null);
+    this(ip, 21, username, password, false, "/");
   }
 
   /**
@@ -53,7 +53,7 @@ public class FTPClientUtils {
    * @throws IOException 
    */
   public FTPClientUtils(String ip, int port, String username, String password) throws IllegalArgumentException, ConnectException, SocketException, IOException {
-    this(ip, port, username, password, false, null);
+    this(ip, port, username, password, false, "/");
   }
 
   /**
@@ -81,20 +81,7 @@ public class FTPClientUtils {
     this.password = password;
     this.passiveMode = passiveMode;
     this.basePath = basePath;
-    if (null == this.ftpClient) {
-      // 创建链接实例
-      this.ftpClient = new FTPClient();
-      // 链接
-      ftpClient.connect(this.ip, this.port);
-      // 登录
-      ftpClient.login(this.username, this.password);
-      // 切换目录
-      if (null != this.basePath) ftpClient.changeWorkingDirectory(basePath);
-      // 修改模式
-      if (this.passiveMode) ftpClient.enterLocalPassiveMode();
-      // 修改Unix配置,FTP架设在Windows上,可忽略
-      ftpClient.configure(new FTPClientConfig("com.xyshzh.ftp.client.UnixFTPEntryParser"));
-    }
+    this.reconnect();
   }
 
   /**
@@ -120,7 +107,7 @@ public class FTPClientUtils {
       // 修改模式
       if (this.passiveMode) ftpClient.enterLocalPassiveMode();
       // 修改Unix配置,FTP架设在Windows上,可忽略
-      ftpClient.configure(new FTPClientConfig("com.xyshzh.ftp.client.UnixFTPEntryParser"));
+      ftpClient.configure(new FTPClientConfig(com.xyshzh.ftp.parser.UnixFTPEntryParser.class.getName()));
     }
   }
 
