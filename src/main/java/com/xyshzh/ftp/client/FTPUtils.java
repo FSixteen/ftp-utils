@@ -274,10 +274,10 @@ public class FTPUtils {
             String rfn = remotePath + file.getName();
             String lfn = localPath + file.getName();
             log.info("文件处理中 :: " + rfn + "  -->  " + lfn);
-            OutputStream is = new FileOutputStream(new File(lfn + ".temp")); // 创建输出流
+            OutputStream is = new FileOutputStream(new File(lfn + ".COPYING")); // 创建输出流
             boolean status = this.ftpClient.retrieveFile(rfn, is); // 开始下载
             is.close(); // 关闭输出流
-            new File(lfn + ".temp").renameTo(new File(lfn));
+            new File(lfn + ".COPYING").renameTo(new File(lfn));
             log.info("文件下载结果 :: " + rfn + "  -->  " + lfn + "  ::  " + status);
             if (status && deleteRemoteData) { // 删除远程文件
               boolean deleted = this.ftpClient.deleteFile(remotePath + file.getName());

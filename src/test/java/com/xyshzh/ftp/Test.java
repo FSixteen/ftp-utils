@@ -12,11 +12,13 @@ public class Test {
 
   public static void main(String[] args) {
     try {
-      FTPUtils ftp = new FTPUtils(new FTPClientUtils("127.0.0.1", 21, "ftp", "ftp", true, "/"));
+      FTPUtils ftp = new FTPUtils(new FTPClientUtils("218.58.210.228", 10021, "csrd_1", "csrd", true, "/"));
       String[] files = ftp.fileList("/");
       for (String f : files) {
-        String fname = f.replace(".tmp", "");
-        ftp.renameFile(f, fname);
+        if (f.endsWith(".tmp")) {
+          String fname = f.replace(".tmp", "");
+          ftp.renameFile(f, fname);
+        }
       }
       ftp.close();
     } catch (Exception e) {
